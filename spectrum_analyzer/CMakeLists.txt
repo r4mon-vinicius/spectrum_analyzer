@@ -33,8 +33,10 @@ project(spectrum_analyzer C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-# Add executable. Default name is the project name, version 0.1
+# Adiciona a biblioteca do microfone
+add_subdirectory(libs/mic)
 
+# Add executable. Default name is the project name, version 0.1
 add_executable(spectrum_analyzer spectrum_analyzer.c)
 
 pico_set_program_name(spectrum_analyzer "spectrum_analyzer")
@@ -60,6 +62,7 @@ target_link_libraries(spectrum_analyzer
         hardware_timer
         hardware_clocks
         hardware_adc
+        mic
         
         )
 
