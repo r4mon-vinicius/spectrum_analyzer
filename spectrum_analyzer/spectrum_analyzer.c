@@ -14,18 +14,26 @@ int main() {
         .mic_channel = 2, // Canal 2 do ADC
         .mic_pin = 28, // Pino 28 do RP2040
         .adc_clock_div = 2835.5f, // Gera um clock de 44.1 kHz
-        .samples = SAMPLES
+        .samples = SAMPLES // Numero de amostras
     };
 
-    mic_init(&mic_config);
+    mic_init(&mic_config); // Inicializa o microfone
 
     while (true) {
-        sample_mic(&mic_config, adc_buffer);
-        float avg = mic_power(adc_buffer, mic_config.samples);
-        avg = 2.f * fabsf(ADC_ADJUST(avg));
+        sample_mic(&mic_config, adc_buffer); // Captura as amostras do ADC
 
-        uint8_t intensity = get_intensity(avg);
-        printf("%2d %8.4f\n", intensity, avg);
-        sleep_ms(1000);
+        uint64_t sum = 0; 
+
+        for (uint i = 0; i < SAMPLES; i++) {
+            sum += adc_buffer[i];
+        }
+
+        float avg = sum / (float)SAMPLES;
+        float fft_in[SAMPLES];
+
+        for (uint i = 0; i < SAMPLES; i++) {
+            fft_in[i] = (float)adc_buffer[i] - avg;
+        }
+
     }
 }

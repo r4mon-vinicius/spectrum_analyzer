@@ -36,6 +36,9 @@ pico_sdk_init()
 # Adiciona a biblioteca do microfone
 add_subdirectory(libs/mic)
 
+# Adiciona a biblioteca KISS FFT
+add_subdirectory(libs/fft)
+
 # Add executable. Default name is the project name, version 0.1
 add_executable(spectrum_analyzer spectrum_analyzer.c)
 
@@ -63,7 +66,8 @@ target_link_libraries(spectrum_analyzer
         hardware_clocks
         hardware_adc
         mic
-        
+        kiss_fft
+
         )
 
 pico_add_extra_outputs(spectrum_analyzer)
