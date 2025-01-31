@@ -5,7 +5,7 @@
 #include "kiss_fftr.h"
 #include "ssd1306.h"
 
-// Define o endereço I2C do display OLED
+// Define o endereço i2c do display oled
 #define I2C_SDA 14
 #define I2C_SCL 15
 
@@ -14,6 +14,16 @@ uint16_t adc_buffer[SAMPLES];
 
 int main() {
     stdio_init_all(); // Habilita a comunicação serial
+
+    // Inicializa o i2c do oled
+    i2c_init(i2c1, 400 * 1000); // 400 kHz
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
+    gpio_pull_up(I2C_SDA);
+    gpio_pull_up(I2C_SCL);
+
+    // Inicializa o display OLED
+    ssd1306_init();
 
     // Configuração da FFT
     kiss_fft_scalar fft_in[SAMPLES];
@@ -42,59 +52,48 @@ int main() {
         float avg = sum / (float)SAMPLES;
 
         for (uint i = 0; i < SAMPLES; i++) {
-            fft_in[i] = ((float)adc_buffer[i] - avg) / 2048.0f;  // Normaliza para [-1,1]
+            fft_in[i] = ((float)adc_buffer[i] - avg) / 2048.0f;  // Normaliza para entre -1 e 1
         }
 
+        // Calcula a FFT
         kiss_fftr(fft_cfg, fft_in, fft_out);
 
-        float sampling_rate = 50000.0f; // Taxa de amostragem do ADC
-        float max_magnitude = 0.0f;
-        uint max_index = 0;
+        float magnitudes[SAMPLES / 2];
+        for (int i = 0; i < SAMPLES / 2; i++) {
+            // Calcula a magnitude 
+            magnitudes[i] = sqrtf(fft_out[i].r * fft_out[i].r + fft_out[i].i * fft_out[i].i);
+        }
 
-        for (uint i = 0; i < SAMPLES / 2; i++) {
-            float magnitude = sqrtf(fft_out[i].r * fft_out[i].r + fft_out[i].i * fft_out[i].i);
-
-            // Verifica se a magnitude atual é maior que a máxima encontrada
-            if (magnitude > max_magnitude) {
-                max_magnitude = magnitude;
-                max_index = i;
+        float max_value = 0;
+        // Encontra o maior valor
+        for (int i = 0; i < SAMPLES / 2; i++) {
+            if (magnitudes[i] > max_value) {
+                max_value = magnitudes[i];
             }
         }
 
-        // Resolucao de Frequência
-        float resolution = sampling_rate / SAMPLES;
+        // Normaliza os valores para caberem na altura do display (64px)
+        uint8_t bar_heights[128];
+        for (int i = 0; i < 128; i++) {
+            int index = i * (SAMPLES / 2) / 128;  // Ajusta para 128 colunas 
+            bar_heights[i] = (uint8_t)(magnitudes[index] / max_value * 64);
+        }
+
+        uint8_t frame_buffer[ssd1306_width * (ssd1306_height / 8)] = {0}; // Limpa buffer
+
+        for (int x = 0; x < 128; x++) {
+            for (int y = 0; y < bar_heights[x]; y++) {
+                ssd1306_set_pixel(frame_buffer, x, 63 - y, true); // Inverte y ( o (0,0) é no canto superior esquerdo)
+            }
+        }
+
+        // Atualiza o display
+        struct render_area area = {0, 127, 0, 7, sizeof(frame_buffer)};
+        render_on_display(frame_buffer, &area);
+        // Delay de 10ms para melhorar a visualização
+        sleep_ms(10);
         
-        // Calcula a frequência correspondente à maior magnitude
-        float max_frequency = max_index * resolution;
-        printf("Frequência de maior magnitude: %.2f Hz | Magnitude: %f\n", max_frequency, max_magnitude);
-    }
+        }
 
     kiss_fftr_free(fft_cfg);
 }
-
-// Função para inicializar o display OLED
-// void init_display(uint8_t *ssd, struct render_area *frame_area) {
-//     // Inicializa o I2C
-//     i2c_init(i2c1, ssd1306_i2c_clock * 1000);
-//     gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
-//     gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
-//     gpio_pull_up(I2C_SDA);
-//     gpio_pull_up(I2C_SCL);
-
-//     // Inicializa o display OLED
-//     ssd1306_init();
-
-//     // Configura a área de renderização para o display (largura de ssd1306_width pixels por ssd1306_n_pages páginas)
-//     *frame_area = (struct render_area) {
-//         .start_column = 0,
-//         .end_column = ssd1306_width - 1,
-//         .start_page = 0,
-//         .end_page = ssd1306_n_pages - 1
-//     };
-
-//     calculate_render_area_buffer_length(frame_area);
-
-//     // Limpa o buffer do display
-//     memset(ssd, 0, ssd1306_buffer_length);
-//     render_on_display(ssd, frame_area);
-// }
