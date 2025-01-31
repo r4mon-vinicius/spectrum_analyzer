@@ -3,13 +3,18 @@
 #include "pico/stdlib.h"
 #include "mic.h"
 #include "kiss_fftr.h"
+#include "ssd1306.h"
 
-#define SAMPLES 512 // Número de amostras do ADC
+// Define o endereço I2C do display OLED
+#define I2C_SDA 14
+#define I2C_SCL 15
+
+#define SAMPLES 512 // Número de amostras do ADC (bloco de amostragem)
 uint16_t adc_buffer[SAMPLES];
 
 int main() {
-    stdio_init_all(); // Inicializa a comunicação USB (serial)
-    sleep_ms(5000); // Aguarda 5 segundo para abertu
+    stdio_init_all(); // Habilita a comunicação serial
+
     // Configuração da FFT
     kiss_fft_scalar fft_in[SAMPLES];
     kiss_fft_cpx fft_out[SAMPLES];
@@ -66,3 +71,30 @@ int main() {
 
     kiss_fftr_free(fft_cfg);
 }
+
+// Função para inicializar o display OLED
+// void init_display(uint8_t *ssd, struct render_area *frame_area) {
+//     // Inicializa o I2C
+//     i2c_init(i2c1, ssd1306_i2c_clock * 1000);
+//     gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
+//     gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
+//     gpio_pull_up(I2C_SDA);
+//     gpio_pull_up(I2C_SCL);
+
+//     // Inicializa o display OLED
+//     ssd1306_init();
+
+//     // Configura a área de renderização para o display (largura de ssd1306_width pixels por ssd1306_n_pages páginas)
+//     *frame_area = (struct render_area) {
+//         .start_column = 0,
+//         .end_column = ssd1306_width - 1,
+//         .start_page = 0,
+//         .end_page = ssd1306_n_pages - 1
+//     };
+
+//     calculate_render_area_buffer_length(frame_area);
+
+//     // Limpa o buffer do display
+//     memset(ssd, 0, ssd1306_buffer_length);
+//     render_on_display(ssd, frame_area);
+// }

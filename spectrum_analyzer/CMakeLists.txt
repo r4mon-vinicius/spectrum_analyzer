@@ -39,6 +39,9 @@ add_subdirectory(libs/mic)
 # Adiciona a biblioteca KISS FFT
 add_subdirectory(libs/fft)
 
+# Adiciona a biblioteca do display oled
+add_subdirectory(libs/oled)
+
 # Add executable. Default name is the project name, version 0.1
 add_executable(spectrum_analyzer spectrum_analyzer.c)
 
@@ -66,6 +69,7 @@ target_link_libraries(spectrum_analyzer
         hardware_clocks
         hardware_adc
         mic
+        oled
         kiss_fft
 
         )
