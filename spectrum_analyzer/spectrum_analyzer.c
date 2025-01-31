@@ -1,159 +1,99 @@
 #include <stdio.h>
 #include <math.h>
 #include "pico/stdlib.h"
-#include "hardware/adc.h"
-#include "hardware/dma.h"
+#include "mic.h"
+#include "kiss_fftr.h"
+#include "ssd1306.h"
 
-// Pino e canal do microfone no ADC.
-#define MIC_CHANNEL 2
-#define MIC_PIN (26 + MIC_CHANNEL)
+// Define o endereço i2c do display oled
+#define I2C_SDA 14
+#define I2C_SCL 15
 
-// Parâmetros e macros do ADC.
-#define ADC_CLOCK_DIV 96.f
-#define SAMPLES 200 // Número de amostras que serão feitas do ADC.
-#define ADC_ADJUST(x) (x * 3.3f / (1 << 12u) - 1.65f) // Ajuste do valor do ADC para Volts.
-#define ADC_MAX 3.3f
-#define ADC_STEP (3.3f/5.f) // Intervalos de volume do microfone.
-
-#define abs(x) ((x < 0) ? (-x) : (x))
-
-#define LED_RED 13
-#define LED_GREEN 11
-
-// Canal e configurações do DMA
-uint dma_channel;
-dma_channel_config dma_cfg;
-
-// Buffer de amostras do ADC.
+#define SAMPLES 512 // Número de amostras do ADC (bloco de amostragem)
 uint16_t adc_buffer[SAMPLES];
 
-void sample_mic();
-float mic_power();
-uint8_t get_intensity(float v);
-
-
 int main() {
-    stdio_init_all();
+    stdio_init_all(); // Habilita a comunicação serial
 
-    // Delay para o usuário abrir o monitor serial...
-    sleep_ms(5000);
+    // Inicializa o i2c do oled
+    i2c_init(i2c1, 400 * 1000); // 400 kHz
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
+    gpio_pull_up(I2C_SDA);
+    gpio_pull_up(I2C_SCL);
 
-    gpio_init(LED_RED);
-    gpio_init(LED_GREEN);
-    gpio_set_dir(LED_RED, GPIO_OUT);
-    gpio_set_dir(LED_GREEN, GPIO_OUT);
+    // Inicializa o display OLED
+    ssd1306_init();
 
-    // Preparação da matriz de LEDs.
-    printf("Preparando NeoPixel...");
-    
-    // Preparação do ADC.
-    printf("Preparando ADC...\n");
-
-    adc_gpio_init(MIC_PIN);
-    adc_init();
-    adc_select_input(MIC_CHANNEL);
-
-    adc_fifo_setup(
-        true, // Habilitar FIFO
-        true, // Habilitar request de dados do DMA
-        1, // Threshold para ativar request DMA é 1 leitura do ADC
-        false, // Não usar bit de erro
-        false // Não fazer downscale das amostras para 8-bits, manter 12-bits.
-    );
-
-    adc_set_clkdiv(ADC_CLOCK_DIV);
-
-    printf("ADC Configurado!\n\n");
-
-    printf("Preparando DMA...");
-
-    // Tomando posse de canal do DMA.
-    dma_channel = dma_claim_unused_channel(true);
-
-    // Configurações do DMA.
-    dma_cfg = dma_channel_get_default_config(dma_channel);
-
-    channel_config_set_transfer_data_size(&dma_cfg, DMA_SIZE_16); // Tamanho da transferência é 16-bits (usamos uint16_t para armazenar valores do ADC)
-    channel_config_set_read_increment(&dma_cfg, false); // Desabilita incremento do ponteiro de leitura (lemos de um único registrador)
-    channel_config_set_write_increment(&dma_cfg, true); // Habilita incremento do ponteiro de escrita (escrevemos em um array/buffer)
-    
-    channel_config_set_dreq(&dma_cfg, DREQ_ADC); // Usamos a requisição de dados do ADC
-
-    // Amostragem de teste.
-    printf("Amostragem de teste...\n");
-    sample_mic();
+    // Configuração da FFT
+    kiss_fft_scalar fft_in[SAMPLES];
+    kiss_fft_cpx fft_out[SAMPLES];
+    kiss_fftr_cfg fft_cfg = kiss_fftr_alloc(SAMPLES, false, 0, 0);
 
 
-    printf("Configuracoes completas!\n");
+    mic_config_t mic_config = {
+        .mic_channel = 2, // Canal 2 do ADC
+        .mic_pin = 28, // Pino 28 do RP2040
+        .adc_clock_div = 960.0f, // 2835.5f = Gera uma taxa amostragem de 44.1 kHz // 960 = 50 khz
+        .samples = SAMPLES // Numero de amostras
+    };
 
-    printf("\n----\nIniciando loop...\n----\n");
+    mic_init(&mic_config); // Inicializa o microfone
+
     while (true) {
+        sample_mic(&mic_config, adc_buffer); // Captura as amostras do ADC
 
-        // Realiza uma amostragem do microfone.
-        sample_mic();
+        uint64_t sum = 0; 
 
-        // Pega a potência média da amostragem do microfone.
-        float avg = mic_power();
-        avg = 2.f * abs(ADC_ADJUST(avg)); // Ajusta para intervalo de 0 a 3.3V. (apenas magnitude, sem sinal)
-
-        uint intensity = get_intensity(avg); // Calcula intensidade a ser mostrada na matriz de LEDs.
-
-        if (intensity != 0) {
-            gpio_put(LED_GREEN, 1);
-            gpio_put(LED_RED, 0);
-        } else {
-            gpio_put(LED_GREEN, 0);
-            gpio_put(LED_RED, 1);
+        for (uint i = 0; i < SAMPLES; i++) {
+            sum += adc_buffer[i];
         }
 
-        // Envia a intensidade e a média das leituras do ADC por serial.
-        printf("%2d %8.4f\r", intensity, avg);
-    }
-}
+        float avg = sum / (float)SAMPLES;
 
-/**
- * Realiza as leituras do ADC e armazena os valores no buffer.
- */
-void sample_mic() {
-    adc_fifo_drain(); // Limpa o FIFO do ADC.
-    adc_run(false); // Desliga o ADC (se estiver ligado) para configurar o DMA.
+        for (uint i = 0; i < SAMPLES; i++) {
+            fft_in[i] = ((float)adc_buffer[i] - avg) / 2048.0f;  // Normaliza para entre -1 e 1
+        }
 
-    dma_channel_configure(dma_channel, &dma_cfg,
-        adc_buffer, // Escreve no buffer.
-        &(adc_hw->fifo), // Lê do ADC.
-        SAMPLES, // Faz SAMPLES amostras.
-        true // Liga o DMA.
-    );
+        // Calcula a FFT
+        kiss_fftr(fft_cfg, fft_in, fft_out);
 
-    // Liga o ADC e espera acabar a leitura.
-    adc_run(true);
-    dma_channel_wait_for_finish_blocking(dma_channel);
-    
-    // Acabou a leitura, desliga o ADC de novo.
-    adc_run(false);
-}
+        float magnitudes[SAMPLES / 2];
+        for (int i = 0; i < SAMPLES / 2; i++) {
+            // Calcula a magnitude 
+            magnitudes[i] = sqrtf(fft_out[i].r * fft_out[i].r + fft_out[i].i * fft_out[i].i);
+        }
 
-/**
- * Calcula a potência média das leituras do ADC. (Valor RMS)
- */
-float mic_power() {
-    float avg = 0.f;
+        float max_value = 0;
+        // Encontra o maior valor
+        for (int i = 0; i < SAMPLES / 2; i++) {
+            if (magnitudes[i] > max_value) {
+                max_value = magnitudes[i];
+            }
+        }
 
-    for (uint i = 0; i < SAMPLES; ++i)
-        avg += adc_buffer[i] * adc_buffer[i];
-    
-    avg /= SAMPLES;
-    return sqrt(avg);
-}
+        // Normaliza os valores para caberem na altura do display (64px)
+        uint8_t bar_heights[128];
+        for (int i = 0; i < 128; i++) {
+            int index = i * (SAMPLES / 2) / 128;  // Ajusta para 128 colunas 
+            bar_heights[i] = (uint8_t)(magnitudes[index] / max_value * 64);
+        }
 
-/**
- * Calcula a intensidade do volume registrado no microfone, de 0 a 4, usando a tensão.
- */
-uint8_t get_intensity(float v) {
-    uint count = 0;
+        uint8_t frame_buffer[ssd1306_width * (ssd1306_height / 8)] = {0}; // Limpa buffer
 
-    while ((v -= ADC_STEP/20) > 0.f)
-        ++count;
-    
-    return count;
+        for (int x = 0; x < 128; x++) {
+            for (int y = 0; y < bar_heights[x]; y++) {
+                ssd1306_set_pixel(frame_buffer, x, 63 - y, true); // Inverte y ( o (0,0) é no canto superior esquerdo)
+            }
+        }
+
+        // Atualiza o display
+        struct render_area area = {0, 127, 0, 7, sizeof(frame_buffer)};
+        render_on_display(frame_buffer, &area);
+        // Delay de 10ms para melhorar a visualização
+        sleep_ms(10);
+        
+        }
+
+    kiss_fftr_free(fft_cfg);
 }

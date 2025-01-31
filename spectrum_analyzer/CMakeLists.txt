@@ -33,13 +33,20 @@ project(spectrum_analyzer C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-# Add executable. Default name is the project name, version 0.1
+# Adiciona a biblioteca do microfone
+add_subdirectory(libs/mic)
 
+# Adiciona a biblioteca KISS FFT
+add_subdirectory(libs/fft)
+
+# Adiciona a biblioteca do display oled
+add_subdirectory(libs/oled)
+
+# Add executable. Default name is the project name, version 0.1
 add_executable(spectrum_analyzer spectrum_analyzer.c)
 
 pico_set_program_name(spectrum_analyzer "spectrum_analyzer")
 pico_set_program_version(spectrum_analyzer "0.1")
-
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(spectrum_analyzer 0)
@@ -61,7 +68,10 @@ target_link_libraries(spectrum_analyzer
         hardware_timer
         hardware_clocks
         hardware_adc
+        mic
+        oled
+        kiss_fft
+        
         )
 
 pico_add_extra_outputs(spectrum_analyzer)
-
