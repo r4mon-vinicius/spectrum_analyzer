@@ -71,8 +71,7 @@ target_link_libraries(spectrum_analyzer
         mic
         oled
         kiss_fft
-
+        
         )
 
 pico_add_extra_outputs(spectrum_analyzer)
-
