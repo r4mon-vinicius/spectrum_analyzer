@@ -1,6 +1,6 @@
 # Spectrum Analyzer
 
-Este projeto captura sinais de aúdio do microfone da BitDogLab e utiliza a Transformada Rápida de Fourier (FFT) para extrair as componentes de frequência, exibindo os resultados no display OLED.
+Este projeto captura sinais de áudio do microfone da BitDogLab e utiliza a Transformada Rápida de Fourier (FFT) para extrair as componentes de frequência, exibindo os resultados no display OLED.
 
 ## Funcionamento 
 
