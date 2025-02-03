@@ -29,3 +29,10 @@ Este projeto captura sinais de aúdio do microfone da BitDogLab e utiliza a Tran
 - Implementação de uma escala númerica de frequências no display.
 - Otimização do algoritmo de exibição.
 - Aplicação de filtros digitais para atenuação de ruídos.
+
+## Links
+
+O projeto foi baseado nos seguintes repositórios:
+
+- [BitDogLab C](https://github.com/BitDogLab/BitDogLab-C.git)
+- [KISS FFT](https://github.com/mborgerding/kissfft.git)
