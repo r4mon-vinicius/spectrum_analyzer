@@ -23,3 +23,9 @@ Este projeto captura sinais de aúdio do microfone da BitDogLab e utiliza a Tran
     ```
 
 4. Compile e carregue o código na BitDogLab. O display OLED deverá exibir o espectro de frequências capturado pelo microfone.
+
+## Melhorias Futuras
+
+- Implementação de uma escala númerica de frequências no display.
+- Otimização do algoritmo de exibição.
+- Aplicação de filtros digitais para atenuação de ruídos.
